@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"/>
+<title>DB Load Balancer v3</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+header { background: #161b22; border-bottom: 1px solid #30363d; padding: 15px 32px; }
+header h1  { font-size: 1.3rem; color: #58a6ff; }
+header .sub { font-size: .78rem; color: #8b949e; margin-top: 3px; }
+main { padding: 22px 32px; }
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 9px 22px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: .87rem; font-weight: 600; border: 1px solid #30363d; border-bottom: none; background: #0d1117; color: #8b949e; }
+.tab.active { background: #161b22; color: #e6edf3; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.panel { background: #161b22; border: 1px solid #30363d; border-radius: 0 8px 8px 8px; padding: 20px; margin-bottom: 20px; }
+.panel.rad { border-radius: 8px; }
+.panel h2  { font-size: .72rem; color: #8b949e; margin-bottom: 14px; text-transform: uppercase; letter-spacing: .06em; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+input[type=text], select, textarea { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 8px 12px; border-radius: 6px; font-size: .87rem; }
+.sql-wide { flex: 1; min-width: 260px; font-family: 'Courier New', monospace; }
+textarea  { width: 100%; font-family: 'Courier New', monospace; resize: vertical; min-height: 64px; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: .87rem; font-weight: 600; transition: opacity .15s; white-space: nowrap; }
+.btn:hover { opacity: .78; }
+.btn-green  { background: #238636; color: #fff; }
+.btn-blue   { background: #1f6feb; color: #fff; }
+.btn-orange { background: #b45309; color: #fff; }
+.btn-red    { background: #b91c1c; color: #fff; }
+.btn-purple { background: #6e40c9; color: #fff; }
+.hint { font-size: .76rem; color: #8b949e; margin-top: 6px; line-height: 1.6; }
+.hint code { background: #21262d; padding: 1px 6px; border-radius: 4px; color: #79c0ff; }
+.algo-explain { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; margin-top: 10px; font-size: .78rem; color: #8b949e; }
+.algo-explain b { color: #58a6ff; }
+.summary-bar { display: flex; gap: 28px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 22px; margin-bottom: 20px; flex-wrap: wrap; }
+.s-item { display: flex; flex-direction: column; }
+.s-val  { font-size: 1.6rem; font-weight: 700; color: #e6edf3; }
+.s-lbl  { font-size: .66rem; color: #8b949e; text-transform: uppercase; letter-spacing: .04em; }
+.cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; position: relative; transition: border-color .3s, box-shadow .3s; }
+.card.highlight-primary { border-color: #fb923c; box-shadow: 0 0 14px #fb923c33; }
+.card .node-name { font-size: .92rem; font-weight: 700; color: #58a6ff; margin-bottom: 3px; }
+.port-badge { display: inline-block; background: #1f6feb22; color: #58a6ff; font-size: .68rem; padding: 1px 8px; border-radius: 12px; margin-bottom: 11px; }
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.metric-val { font-size: 1.25rem; font-weight: 700; color: #e6edf3; line-height: 1; }
+.metric-lbl { font-size: .62rem; color: #8b949e; text-transform: uppercase; margin-top: 1px; }
+.load-bar-wrap { margin-top: 12px; }
+.load-bar-bg   { background: #21262d; border-radius: 4px; height: 7px; overflow: hidden; }
+.load-bar-fill { height: 100%; border-radius: 4px; background: #238636; transition: width .5s; }
+.active-dot { position: absolute; top: 15px; right: 15px; width: 10px; height: 10px; border-radius: 50%; }
+/* Pipeline */
+.pipeline-wrap { margin-top: 16px; padding: 18px; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; }
+.pipeline-title { font-size: .72rem; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.pipeline-subtitle { font-size: .80rem; color: #c9d1d9; margin-bottom: 14px; min-height: 20px; }
+.pipeline-flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+.pipe-node { display: flex; flex-direction: column; align-items: center; min-width: 152px; padding: 14px 10px; border-radius: 8px; border: 2px solid #30363d; background: #161b22; transition: border-color .35s, background .35s, box-shadow .35s; }
+.pipe-node .pn-order  { font-size: .62rem; color: #8b949e; margin-bottom: 3px; }
+.pipe-node .pn-label  { font-size: .80rem; font-weight: 700; color: #58a6ff; text-align: center; }
+.pipe-node .pn-port   { font-size: .65rem; color: #8b949e; margin-bottom: 5px; }
+.pipe-node .pn-badge  { font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-bottom: 6px; min-height: 18px; text-align: center; }
+.pn-badge-primary { background: #fb923c22; color: #fb923c; border: 1px solid #fb923c55; }
+.pn-badge-replica { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44; }
+.pn-badge-empty   { background: transparent; border: 1px solid transparent; color: transparent; }
+.pipe-node .pn-state  { font-size: .80rem; font-weight: 700; margin-bottom: 3px; min-height: 18px; }
+.pipe-node .pn-detail { font-size: .64rem; color: #8b949e; text-align: center; min-height: 30px; word-break: break-word; line-height: 1.4; }
+.pipe-node .pn-retry  { font-size: .62rem; color: #fb923c; margin-top: 3px; min-height: 14px; }
+.pipe-node .pn-ms     { font-size: .62rem; color: #8b949e; margin-top: 2px; }
+.pipe-node.state-PENDING     { border-color: #30363d; }
+.pipe-node.state-EXECUTING   { border-color: #1f6feb; background: #1a2840; animation: pulse-blue 1s infinite; }
+.pipe-node.state-HELD        { border-color: #d4770e; background: #2a1f0e; box-shadow: 0 0 8px #d4770e33; }
+.pipe-node.state-COMMITTED   { border-color: #238636; background: #0d2116; box-shadow: 0 0 8px #23863633; }
+.pipe-node.state-FAILED      { border-color: #b91c1c; background: #2a0d0d; box-shadow: 0 0 8px #b91c1c44; }
+.pipe-node.state-ROLLED_BACK { border-color: #6e40c9; background: #1c1030; }
+@keyframes pulse-blue { 0%,100%{box-shadow:0 0 0 0 #1f6feb44}50%{box-shadow:0 0 0 8px transparent} }
+.sl-PENDING     { color: #8b949e; }
+.sl-EXECUTING   { color: #58a6ff; }
+.sl-HELD        { color: #fb923c; }
+.sl-COMMITTED   { color: #3fb950; }
+.sl-FAILED      { color: #f85149; }
+.sl-ROLLED_BACK { color: #bc8cff; }
+.pipe-arrow { flex-shrink: 0; width: 40px; display: flex; align-items: center; justify-content: center; }
+.arrow-line { width: 100%; height: 2px; background: #30363d; position: relative; transition: background .35s; }
+.arrow-line::after { content:''; position:absolute; right:-1px; top:-4px; border-left:8px solid #30363d; border-top:5px solid transparent; border-bottom:5px solid transparent; transition:border-left-color .35s; }
+.arrow-line.al-active  { background: #1f6feb; } .arrow-line.al-active::after  { border-left-color: #1f6feb; }
+.arrow-line.al-held    { background: #d4770e; } .arrow-line.al-held::after    { border-left-color: #d4770e; }
+.arrow-line.al-done    { background: #238636; } .arrow-line.al-done::after    { border-left-color: #238636; }
+.arrow-line.al-failed  { background: #b91c1c; } .arrow-line.al-failed::after  { border-left-color: #b91c1c; }
+.write-summary { margin-top: 14px; padding: 12px 14px; border-radius: 6px; border: 1px solid #30363d; font-size: .85rem; display: none; }
+.write-summary.committed  { border-color: #238636; background: #0d2116; }
+.write-summary.rolledback { border-color: #6e40c9; background: #1c1030; }
+.read-result { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 14px; margin-top: 14px; display: none; }
+.read-result h3 { font-size: .8rem; color: #8b949e; margin-bottom: 9px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+th { background: #21262d; color: #8b949e; text-align: left; padding: 9px 12px; font-size: .67rem; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #30363d; }
+td { padding: 8px 12px; border-bottom: 1px solid #21262d; }
+tbody tr:hover td { background: #1c2128; }
+.badge-SUCCESS    { color: #3fb950; font-weight: 700; }
+.badge-COMMITTED  { color: #3fb950; font-weight: 700; }
+.badge-ERROR      { color: #f85149; font-weight: 700; }
+.badge-REJECTED   { color: #d29922; font-weight: 700; }
+.badge-ROLLED_BACK { color: #bc8cff; font-weight: 700; }
+.mono { font-family: 'Courier New', monospace; font-size: .78rem; color: #79c0ff; }
+.spinner { display:none; width:13px; height:13px; border:2px solid #30363d; border-top-color:#58a6ff; border-radius:50%; animation:spin .7s linear infinite; margin-left:8px; vertical-align:middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media(max-width:900px){ .cards{grid-template-columns:1fr} main{padding:14px 16px} .pipeline-flow{flex-direction:column;align-items:flex-start} .pipe-arrow{transform:rotate(90deg);margin:4px 65px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚖️ DB Load Balancer — v3 (Algorithm-Driven Primary Selection)</h1>
+  <div class="sub">Algorithm picks which node is PRIMARY write target · Replicates to other 2 · Retry ×3 · All-or-Nothing Rollback</div>
+</header>
+<main>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('read')">🔍 SELECT</div>
+  <div class="tab"        onclick="switchTab('write')">✏️ INSERT / UPDATE / DELETE</div>
+</div>
+
+<!-- READ TAB -->
+<div class="tab-content active" id="tab-read">
+  <div class="panel">
+    <h2>SELECT — algorithm picks one node to read from</h2>
+    <div class="row">
+      <input id="sqlRead" class="sql-wide" type="text" value="SELECT * FROM employees"/>
+      <select id="algoRead" onchange="updateExplain('read')">
+        <option value="ROUND_ROBIN">Round Robin</option>
+        <option value="LEAST_CONNECTIONS">Least Connections</option>
+        <option value="WEIGHTED_ROUND_ROBIN">Weighted Round Robin</option>
+      </select>
+      <input id="clientRead" type="text" value="Client-1" style="width:100px"/>
+      <button class="btn btn-green"  onclick="sendSelect()">▶ Send</button>
+      <button class="btn btn-blue"   onclick="sendBurst()">⚡ Burst ×15</button>
+      <button class="btn btn-purple" onclick="location.reload()">↺ Reset</button>
+      <span class="spinner" id="spinR"></span>
+    </div>
+    <div class="algo-explain" id="explainRead">
+      <b>Round Robin:</b> cycles Node1 → Node2 → Node3 → Node1… in strict order regardless of load.
+    </div>
+    <div class="hint">
+      Try: <code>SELECT * FROM employees</code> &nbsp;·&nbsp;
+           <code>SELECT * FROM employees WHERE dept='Engineering'</code> &nbsp;·&nbsp;
+           <code>SELECT dept, COUNT(*) n FROM employees GROUP BY dept</code>
+    </div>
+    <div class="read-result" id="readResult">
+      <h3 id="readMeta"></h3>
+      <div class="table-wrap"><table><thead id="readHead"></thead><tbody id="readBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- WRITE TAB -->
+<div class="tab-content" id="tab-write">
+  <div class="panel">
+    <h2>WRITE — algorithm picks primary target node, then replicates to the other 2</h2>
+    <textarea id="sqlWrite">INSERT INTO employees (name, dept, salary) VALUES ('NewEmp', 'Engineering', 85000)</textarea>
+    <div class="row" style="margin-top:10px">
+      <select id="algoWrite" onchange="updateExplain('write')">
+        <option value="ROUND_ROBIN">Round Robin</option>
+        <option value="LEAST_CONNECTIONS">Least Connections</option>
+        <option value="WEIGHTED_ROUND_ROBIN">Weighted Round Robin</option>
+      </select>
+      <input id="clientWrite" type="text" value="Client-1" style="width:100px"/>
+      <button class="btn btn-green"  onclick="sendWrite()">▶ Execute</button>
+      <button class="btn btn-orange" onclick="setSql(`UPDATE employees SET salary = salary * 1.10 WHERE dept = 'Engineering'`)">Sample UPDATE</button>
+      <button class="btn btn-red"    onclick="setSql(`DELETE FROM employees WHERE name = 'NewEmp'`)">Sample DELETE</button>
+      <span class="spinner" id="spinW"></span>
+    </div>
+    <div class="algo-explain" id="explainWrite">
+      <b>Round Robin:</b> the write cycles — 1st write targets Node1 first, 2nd write targets Node2 first, 3rd targets Node3 first, then repeats. The chosen node is the <b style="color:#fb923c">PRIMARY TARGET</b>. The other 2 receive the same SQL as replicas in order.
+    </div>
+    <div class="hint">
+      ⚡ <b>How writes work:</b> The algorithm you pick decides which database node gets the write <b>first</b>.
+      That node is the primary target. The other 2 nodes receive the same SQL as replicas — in sequence,
+      each holding an open transaction. If all 3 succeed → <b>all commit together</b>.
+      If any node fails (after up to 3 retries) → <b>all 3 roll back</b>, nothing is saved anywhere.
+    </div>
+    <div class="pipeline-wrap">
+      <div class="pipeline-title">Live Replication Pipeline</div>
+      <div class="pipeline-subtitle" id="pipeSubtitle">Send a write query to see the pipeline animate.</div>
+      <div class="pipeline-flow" id="pipeFlow">
+        <!-- JS builds this -->
+      </div>
+      <div class="write-summary" id="writeSummary"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary bar -->
+<div class="summary-bar">
+  <div class="s-item"><span class="s-val" id="sumTotal">0</span><span class="s-lbl">Total Requests</span></div>
+  <div class="s-item"><span class="s-val" id="sumSuccess" style="color:#3fb950">0</span><span class="s-lbl">Success / Committed</span></div>
+  <div class="s-item"><span class="s-val" id="sumError"   style="color:#f85149">0</span><span class="s-lbl">Errors</span></div>
+  <div class="s-item"><span class="s-val" id="sumWrites"  style="color:#fb923c">0</span><span class="s-lbl">Write Ops</span></div>
+  <div class="s-item"><span class="s-val" id="sumRollback" style="color:#bc8cff">0</span><span class="s-lbl">Rollbacks</span></div>
+  <div class="s-item"><span class="s-val" id="sumRetries" style="color:#d29922">0</span><span class="s-lbl">Total Retries</span></div>
+</div>
+
+<!-- Node cards -->
+<div class="cards" id="nodeCards"></div>
+
+<!-- Transaction log -->
+<div class="panel rad">
+  <h2>Transaction Log (latest 30)</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Time</th><th>Client</th><th>Op</th><th>Algorithm</th>
+        <th>Primary Target</th><th>SQL</th><th>Status</th><th>Rows</th><th>Retries</th><th>ms</th>
+      </tr></thead>
+      <tbody id="logBody">
+        <tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">No operations yet — send a query above</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</main>
+
+<script>
+const algoText = {
+  ROUND_ROBIN: {
+    read:  '<b>Round Robin (READ):</b> cycles Node1 → Node2 → Node3 → Node1 in strict order.',
+    write: '<b>Round Robin (WRITE):</b> cycles which node is the <b style="color:#fb923c">primary write target</b>. 1st write → Node1 first. 2nd write → Node2 first. 3rd → Node3 first. Then repeats. The other 2 nodes receive the write as replicas.'
+  },
+  LEAST_CONNECTIONS: {
+    read:  '<b>Least Connections (READ):</b> picks whichever node currently has the fewest active queries.',
+    write: '<b>Least Connections (WRITE):</b> the node with the <b style="color:#fb923c">fewest active connections right now</b> becomes the primary write target. Best for uneven load distribution. The other 2 replicate.'
+  },
+  WEIGHTED_ROUND_ROBIN: {
+    read:  '<b>Weighted Round Robin (READ):</b> distributes reads proportional to weight (currently 1:1:1 = same as Round Robin).',
+    write: '<b>Weighted Round Robin (WRITE):</b> chooses primary target proportional to weight (currently 1:1:1 = equal). A higher-weight node would receive more primary write turns. The other 2 replicate.'
+  }
+};
+
+function updateExplain(tab) {
+  const algo = document.getElementById(tab==='read'?'algoRead':'algoWrite').value;
+  document.getElementById(tab==='read'?'explainRead':'explainWrite').innerHTML = algoText[algo][tab];
+}
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===(name==='read'?0:1)));
+  document.getElementById('tab-read').classList.toggle('active',  name==='read');
+  document.getElementById('tab-write').classList.toggle('active', name==='write');
+}
+
+// SELECT
+async function sendSelect() {
+  const sql=document.getElementById('sqlRead').value.trim();
+  const algo=document.getElementById('algoRead').value;
+  const client=document.getElementById('clientRead').value.trim()||'Client-1';
+  spin('spinR',true);
+  try { const d=await post(`/api/query?sql=${enc(sql)}&algorithm=${algo}&clientId=${enc(client)}`); showReadResult(d); await refresh(); }
+  finally { spin('spinR',false); }
+}
+async function sendBurst() {
+  const sql=document.getElementById('sqlRead').value.trim();
+  const algo=document.getElementById('algoRead').value;
+  spin('spinR',true);
+  try { await Promise.all([...Array(15)].map((_,i)=>post(`/api/query?sql=${enc(sql)}&algorithm=${algo}&clientId=${enc('Client-'+(i+1))}`)));
+    document.getElementById('readResult').style.display='none'; await refresh(); }
+  finally { spin('spinR',false); }
+}
+function showReadResult(d) {
+  const box=document.getElementById('readResult'); box.style.display='block';
+  const sc=d.status==='SUCCESS'?'#3fb950':'#f85149';
+  document.getElementById('readMeta').innerHTML=
+    `Routed → <b style="color:#58a6ff">${d.nodeName||'—'}</b> | Port <b>:${d.port||'—'}</b> | ${d.algorithm} | <span style="color:${sc}">${d.status}</span> | ${d.responseTimeMs}ms`;
+  const rows=d.rows||[];
+  if(!rows.length){document.getElementById('readHead').innerHTML='';document.getElementById('readBody').innerHTML=`<tr><td colspan="99" style="color:#8b949e">${d.error||'No rows'}</td></tr>`;return;}
+  const cols=Object.keys(rows[0]);
+  document.getElementById('readHead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  document.getElementById('readBody').innerHTML=rows.map(r=>'<tr>'+cols.map(c=>`<td>${r[c]??''}</td>`).join('')+'</tr>').join('');
+}
+
+// WRITE
+async function sendWrite() {
+  const sql=document.getElementById('sqlWrite').value.trim();
+  const algo=document.getElementById('algoWrite').value;
+  const client=document.getElementById('clientWrite').value.trim()||'Client-1';
+  buildPipelineSkeleton();
+  spin('spinW',true);
+  try { const d=await post(`/api/write?sql=${enc(sql)}&algorithm=${algo}&clientId=${enc(client)}`);
+    renderPipeline(d); showWriteSummary(d); highlightCard(d.primaryNodeName); await refresh(); }
+  finally { spin('spinW',false); }
+}
+function setSql(s){document.getElementById('sqlWrite').value=s;}
+
+// Build empty pipeline skeleton before request
+function buildPipelineSkeleton() {
+  const flow=document.getElementById('pipeFlow');
+  flow.innerHTML='';
+  for(let i=0;i<3;i++){
+    if(i>0){const a=document.createElement('div');a.className='pipe-arrow';a.innerHTML=`<div class="arrow-line" id="arr-${i-1}"></div>`;flow.appendChild(a);}
+    const n=document.createElement('div');
+    n.className='pipe-node state-PENDING';n.id='pn-'+i;
+    n.innerHTML=`<div class="pn-order">Step ${i+1}</div><div class="pn-label">—</div><div class="pn-port">—</div><div class="pn-badge pn-badge-empty">—</div><div class="pn-state sl-PENDING">⏳ PENDING</div><div class="pn-detail">Waiting…</div><div class="pn-retry"></div><div class="pn-ms"></div>`;
+    flow.appendChild(n);
+  }
+  document.getElementById('writeSummary').style.display='none';
+  document.getElementById('pipeSubtitle').textContent='Executing…';
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('highlight-primary'));
+}
+
+const icons={PENDING:'⏳',EXECUTING:'⚙️',HELD:'🔒',COMMITTED:'✅',FAILED:'❌',ROLLED_BACK:'↩️'};
+
+function renderPipeline(data) {
+  const stages=data.pipeline||[];
+  document.getElementById('pipeSubtitle').innerHTML=
+    `Algorithm: <b style="color:#58a6ff">${data.algorithm}</b> &nbsp;→&nbsp; chose <b style="color:#fb923c">${data.primaryNodeName||'—'}</b> as primary write target &nbsp;→&nbsp; `+
+    (data.status==='COMMITTED'?'<span style="color:#3fb950">✅ all 3 committed</span>':'<span style="color:#bc8cff">↩️ all rolled back</span>');
+
+  stages.forEach((s,i)=>{
+    const el=document.getElementById('pn-'+i); if(!el) return;
+    el.className='pipe-node state-'+s.state;
+    el.querySelector('.pn-order').textContent='Step '+(s.pipelineOrder+1);
+    el.querySelector('.pn-label').textContent=s.nodeName;
+    el.querySelector('.pn-port').textContent=':'+s.port;
+    const b=el.querySelector('.pn-badge');
+    if(s.primaryTarget){b.textContent='★ PRIMARY TARGET';b.className='pn-badge pn-badge-primary';}
+    else{b.textContent='REPLICA';b.className='pn-badge pn-badge-replica';}
+    const st=el.querySelector('.pn-state');
+    st.className='pn-state sl-'+s.state;
+    st.textContent=(icons[s.state]||'')+' '+s.state.replace('_',' ');
+    el.querySelector('.pn-detail').textContent=s.detail||'';
+    el.querySelector('.pn-retry').textContent=s.retriesUsed>0?`↺ ${s.retriesUsed} retr${s.retriesUsed===1?'y':'ies'} used`:'';
+    el.querySelector('.pn-ms').textContent=s.stageMs>0?s.stageMs+'ms':'';
+    if(i<stages.length-1){
+      const arr=document.getElementById('arr-'+i); if(!arr) return;
+      const ns=stages[i+1]?stages[i+1].state:'';
+      if(s.state==='COMMITTED') arr.className='arrow-line al-done';
+      else if(s.state==='HELD') arr.className=(ns==='FAILED'||ns==='ROLLED_BACK')?'arrow-line al-failed':'arrow-line al-held';
+      else if(s.state==='FAILED'||s.state==='ROLLED_BACK') arr.className='arrow-line al-failed';
+      else arr.className='arrow-line';
+    }
+  });
+}
+
+function showWriteSummary(d){
+  const ws=document.getElementById('writeSummary');ws.style.display='block';
+  const ok=d.status==='COMMITTED';
+  ws.className='write-summary '+(ok?'committed':'rolledback');
+  ws.innerHTML=`<b style="color:${ok?'#3fb950':'#bc8cff'}">${ok?'✅ COMMITTED':'↩️ ROLLED BACK'}</b>`+
+    ` &nbsp;·&nbsp; ${d.operationType} &nbsp;·&nbsp; ${d.affectedRows||0} row(s) &nbsp;·&nbsp; ${d.responseTimeMs}ms`+
+    (d.totalRetries>0?` &nbsp;·&nbsp; <span style="color:#d29922">${d.totalRetries} retr${d.totalRetries===1?'y':'ies'}</span>`:'')+
+    (d.error?`<br><span style="color:#f85149;font-size:.76rem">⚠ ${d.error}</span>`:'');
+}
+
+function highlightCard(primaryName){
+  if(!primaryName) return;
+  document.querySelectorAll('.card').forEach(c=>{
+    const nm=c.querySelector('.node-name');
+    if(nm&&nm.textContent.trim()===primaryName.trim()) c.classList.add('highlight-primary');
+    else c.classList.remove('highlight-primary');
+  });
+}
+
+// Stats
+async function refresh(){
+  const data=await(await fetch('/api/stats')).json();
+  const sAll=data.nodes.reduce((a,n)=>a+(n.successCount||0),0);
+  const eAll=data.nodes.reduce((a,n)=>a+(n.errorCount||0),0);
+  const rAll=data.nodes.reduce((a,n)=>a+(n.retryCount||0),0);
+  const wMax=Math.max(...data.nodes.map(n=>n.writeCount||0));
+  const rbMax=Math.max(...data.nodes.map(n=>n.rollbackCount||0));
+  document.getElementById('sumTotal').textContent=data.totalRequests||0;
+  document.getElementById('sumSuccess').textContent=sAll;
+  document.getElementById('sumError').textContent=eAll;
+  document.getElementById('sumWrites').textContent=wMax;
+  document.getElementById('sumRollback').textContent=rbMax;
+  document.getElementById('sumRetries').textContent=rAll;
+
+  document.getElementById('nodeCards').innerHTML=data.nodes.map(n=>{
+    const active=n.activeConnections>0;
+    return `<div class="card" id="card-${n.name}">
+      <div class="active-dot" style="background:${active?'#3fb950':'#484f58'};box-shadow:${active?'0 0 7px #3fb950':'none'}"></div>
+      <div class="node-name">${n.name}</div>
+      <span class="port-badge">:${n.port} · w${n.weight}</span>
+      <div style="margin-bottom:10px"></div>
+      <div class="metrics">
+        <div><div class="metric-val">${n.totalRequests}</div><div class="metric-lbl">Total Req</div></div>
+        <div><div class="metric-val">${n.activeConnections}</div><div class="metric-lbl">Active</div></div>
+        <div><div class="metric-val" style="color:#3fb950">${n.successCount}</div><div class="metric-lbl">Success</div></div>
+        <div><div class="metric-val" style="color:#f85149">${n.errorCount}</div><div class="metric-lbl">Errors</div></div>
+        <div><div class="metric-val" style="color:#fb923c">${n.writeCount}</div><div class="metric-lbl">Writes</div></div>
+        <div><div class="metric-val" style="color:#bc8cff">${n.rollbackCount}</div><div class="metric-lbl">Rollbacks</div></div>
+        <div><div class="metric-val" style="color:#d29922">${n.retryCount}</div><div class="metric-lbl">Retries</div></div>
+        <div><div class="metric-val" style="font-size:1rem">${n.avgResponseMs}ms</div><div class="metric-lbl">Avg Resp</div></div>
+      </div>
+      <div class="load-bar-wrap">
+        <div style="display:flex;justify-content:space-between;font-size:.66rem;color:#8b949e;margin-bottom:4px"><span>Load Share</span><span>${n.loadPct}%</span></div>
+        <div class="load-bar-bg"><div class="load-bar-fill" style="width:${n.loadPct}%"></div></div>
+      </div></div>`;
+  }).join('');
+
+  const log=data.log||[];
+  if(!log.length) return;
+  document.getElementById('logBody').innerHTML=log.slice(0,30).map(l=>{
+    const isW=['INSERT','UPDATE','DELETE'].includes(l.operationType);
+    return `<tr>
+      <td class="mono">${l.timestamp||''}</td>
+      <td>${l.clientId||''}</td>
+      <td><b style="color:${isW?'#fb923c':'#58a6ff'}">${l.operationType||'—'}</b></td>
+      <td style="font-size:.72rem;color:#8b949e">${l.algorithm||''}</td>
+      <td style="font-size:.78rem;font-weight:600;color:${isW?'#fb923c':'#58a6ff'}">${isW?(l.primaryNodeName||'—'):(l.nodeName||'—')}</td>
+      <td class="mono" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(l.sql||'')}">${l.sql||''}</td>
+      <td class="badge-${l.status||''}">${l.status||''}</td>
+      <td>${isW?(l.affectedRows??'—'):((l.rows&&l.rows.length)??'—')}</td>
+      <td style="color:#d29922">${isW?(l.totalRetries??0):'—'}</td>
+      <td>${l.responseTimeMs||0}</td></tr>`;
+  }).join('');
+}
+
+function enc(s){return encodeURIComponent(s);}
+function esc(s){return s.replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function spin(id,on){document.getElementById(id).style.display=on?'inline-block':'none';}
+async function post(url){return(await fetch(url,{method:'POST'})).json();}
+
+setInterval(refresh,2000);
+refresh();
+</script>
+</body>
+</html>

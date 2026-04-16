@@ -1,0 +1,65 @@
+================================================================
+  CHATGPT PROMPT — Copy & paste this when you need help
+================================================================
+
+Paste this entire block to ChatGPT before asking your question:
+
+----------------------------------------------------------------
+
+I am working on a Java-based Database Load Balancer Simulator project. Here is the full context:
+
+WHAT THE PROJECT IS:
+- A Spring Boot 3 (Java 17) web application running on port 8080
+- It acts as a load balancer sitting in front of 3 real MySQL databases
+- The 3 MySQL instances run on the SAME Mac machine but on different ports: 3306, 3307, 3308
+- Each MySQL instance has a database called "lbsim" with a table called "employees" (columns: id, name, dept, salary)
+- The app only allows SELECT queries (INSERT/UPDATE/DELETE are rejected)
+- It routes queries using 3 algorithms: Round Robin, Least Connections, Weighted Round Robin
+- There is a live web dashboard at http://localhost:8080 showing node stats and a request log
+
+PROJECT STRUCTURE:
+load-balancer-sim/
+├── pom.xml  (Spring Boot 3.2.0, mysql-connector-j 8.3.0, Thymeleaf)
+└── src/main/
+    ├── java/com/lbsim/
+    │   ├── LoadBalancerApp.java           (main entry point)
+    │   ├── model/QueryResult.java         (response model)
+    │   ├── loadbalancer/DatabaseNode.java (tracks stats per node)
+    │   ├── loadbalancer/LoadBalancerService.java (routing logic)
+    │   └── controller/QueryController.java (REST endpoints)
+    └── resources/
+        ├── application.properties  (DB URLs, credentials)
+        └── templates/dashboard.html (Thymeleaf + JS frontend)
+
+KEY ENDPOINTS:
+- GET  /           → serves the dashboard HTML
+- POST /api/query  → params: sql, algorithm, clientId → returns QueryResult JSON
+- GET  /api/stats  → returns node stats + request log as JSON
+
+DATABASE CONFIG (application.properties):
+- db.node1.url = jdbc:mysql://127.0.0.1:3306/lbsim
+- db.node2.url = jdbc:mysql://127.0.0.1:3307/lbsim
+- db.node3.url = jdbc:mysql://127.0.0.1:3308/lbsim
+- db.username = root
+- db.password = Star@123
+- All weights = 1 (equal, 1:1:1)
+
+SETUP ENVIRONMENT:
+- Mac (may be Apple Silicon M1/M2 or Intel)
+- MySQL installed via Homebrew
+- Node 1 = existing brew MySQL (port 3306, password Star@123)
+- Node 2 & 3 = manually started with mysqld --defaults-file
+- Config files at: /usr/local/mysql-instances/node2.cnf and node3.cnf
+- Data dirs at: /usr/local/mysql-instances/node2/data and node3/data
+- Java 17 via Homebrew (openjdk@17)
+- Maven 3.x via Homebrew
+- Built with: mvn clean package -DskipTests
+- Run with: java -jar target/load-balancer-sim-1.0.0.jar
+
+I am a beginner and do not know Java or Spring Boot deeply. Please give clear, step-by-step answers with exact terminal commands when relevant.
+
+MY QUESTION:
+[TYPE YOUR QUESTION HERE]
+
+----------------------------------------------------------------
+================================================================
